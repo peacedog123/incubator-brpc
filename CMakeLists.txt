@@ -26,10 +26,10 @@ else()
     message(WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang and GCC.")
 endif()
 
-option(WITH_GLOG "With glog" OFF)
+option(WITH_GLOG "With glog" ON)
 option(DEBUG "Print debug logs" OFF)
 option(WITH_DEBUG_SYMBOLS "With debug symbols" ON)
-option(WITH_THRIFT "With thrift framed protocol supported" OFF)
+option(WITH_THRIFT "With thrift framed protocol supported" ON)
 option(BUILD_UNIT_TESTS "Whether to build unit tests" OFF)
 
 set(WITH_GLOG_VAL "0")
@@ -165,6 +165,7 @@ set(DYNAMIC_LIB
     ${THRIFTNB_LIB}
     ${OPENSSL_LIBRARIES}
     ${OPENSSL_CRYPTO_LIBRARY}
+    event
     dl
     z
     )
@@ -212,6 +213,11 @@ set(BUTIL_SOURCES
     ${PROJECT_SOURCE_DIR}/src/butil/third_party/snappy/snappy-stubs-internal.cc
     ${PROJECT_SOURCE_DIR}/src/butil/third_party/snappy/snappy.cc
     ${PROJECT_SOURCE_DIR}/src/butil/third_party/murmurhash3/murmurhash3.cpp
+    ${PROJECT_SOURCE_DIR}/src/butil/third_party/libvbucket/rfc1321/md5c.c
+    ${PROJECT_SOURCE_DIR}/src/butil/third_party/libvbucket/cJSON.c
+    ${PROJECT_SOURCE_DIR}/src/butil/third_party/libvbucket/crc32.c
+    ${PROJECT_SOURCE_DIR}/src/butil/third_party/libvbucket/ketama.c
+    ${PROJECT_SOURCE_DIR}/src/butil/third_party/libvbucket/vbucket.c
     ${PROJECT_SOURCE_DIR}/src/butil/arena.cpp
     ${PROJECT_SOURCE_DIR}/src/butil/at_exit.cc
     ${PROJECT_SOURCE_DIR}/src/butil/atomicops_internals_x86_gcc.cc

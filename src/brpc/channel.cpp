@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -102,7 +102,7 @@ static ChannelSignature ComputeChannelSignature(const ChannelOptions& opt) {
         }
         butil::MurmurHash3_x64_128_Update(&mm_ctx, buf.data(), buf.size());
         buf.clear();
-    
+
         if (opt.has_ssl_options()) {
             const CertInfo& cert = opt.ssl_options().client_cert;
             if (!cert.certificate.empty()) {
@@ -158,7 +158,7 @@ int Channel::InitChannelOptions(const ChannelOptions* options) {
         // Save has_error which will be overriden in later assignments to
         // connection_type.
         const bool has_error = _options.connection_type.has_error();
-        
+
         if (protocol->supported_connection_type & CONNECTION_TYPE_SINGLE) {
             _options.connection_type = CONNECTION_TYPE_SINGLE;
         } else if (protocol->supported_connection_type & CONNECTION_TYPE_POOLED) {
@@ -335,7 +335,7 @@ int Channel::Init(const char* ns_url,
     LoadBalancerWithNaming* lb = new (std::nothrow) LoadBalancerWithNaming;
     if (NULL == lb) {
         LOG(FATAL) << "Fail to new LoadBalancerWithNaming";
-        return -1;        
+        return -1;
     }
     GetNamingServiceThreadOptions ns_opt;
     ns_opt.succeed_without_server = _options.succeed_without_server;
@@ -349,6 +349,36 @@ int Channel::Init(const char* ns_url,
         delete lb;
         return -1;
     }
+    _lb.reset(lb);
+    return 0;
+}
+
+int Channel::Init(NamingService* ns,
+                  const char* lb_name,
+                  const ChannelOptions* options) {
+    std::unique_ptr<NamingService> ns_guard(ns);
+    if (ns == nullptr || lb_name == nullptr) {
+        LOG(FATAL) << "Null naming service or load balancer name.";
+        return -1;
+    }
+    GlobalInitializeOrDie();
+    if (InitChannelOptions(options) != 0) {
+        return -1;
+    }
+    LoadBalancerWithNaming* lb = new (std::nothrow) LoadBalancerWithNaming;
+    if (NULL == lb) {
+        LOG(FATAL) << "Fail to new LoadBalancerWithNaming";
+        return -1;
+    }
+    GetNamingServiceThreadOptions ns_opt;
+    ns_opt.succeed_without_server = _options.succeed_without_server;
+    ns_opt.log_succeed_without_server = _options.log_succeed_without_server;
+    if (lb->Init(ns, lb_name, _options.ns_filter, &ns_opt) != 0) {
+        LOG(ERROR) << "Fail to initialize LoadBalancerWithNaming";
+        delete lb;
+        return -1;
+    }
+    ns_guard.release();
     _lb.reset(lb);
     return 0;
 }

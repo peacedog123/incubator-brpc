@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,7 +17,7 @@
 //          Zhangyi Chen(chenzhangyi01@baidu.com)
 
 #include <signal.h>
-#include <openssl/md5.h>  
+#include <openssl/md5.h>
 #include <google/protobuf/descriptor.h>
 #include <gflags/gflags.h>
 #include "bthread/bthread.h"
@@ -194,6 +194,10 @@ void Controller::ResetNonPods() {
         }
         _rpa.reset(NULL);
     }
+    if (_keepalive_parm != nullptr) {
+        delete _keepalive_parm;
+        _keepalive_parm = nullptr;
+    }
     delete _remote_stream_settings;
     _thrift_method_name.clear();
 
@@ -252,6 +256,7 @@ void Controller::ResetPods() {
     _request_stream = INVALID_STREAM_ID;
     _response_stream = INVALID_STREAM_ID;
     _remote_stream_settings = NULL;
+    _couchbase_key_read_replicas = "";
 }
 
 Controller::Call::Call(Controller::Call* rhs)
@@ -345,7 +350,7 @@ void Controller::AppendServerIdentiy() {
         _error_text.reserve(_error_text.size() + MD5_DIGEST_LENGTH * 2 + 2);
         _error_text.push_back('[');
         char ipbuf[64];
-        int len = snprintf(ipbuf, sizeof(ipbuf), "%s:%d", 
+        int len = snprintf(ipbuf, sizeof(ipbuf), "%s:%d",
                            butil::my_ip_cstr(), _server->listen_address().port);
         unsigned char digest[MD5_DIGEST_LENGTH];
         MD5((const unsigned char*)ipbuf, len, digest);
@@ -504,7 +509,7 @@ void Controller::NotifyOnCancel(google::protobuf::Closure* callback) {
         LOG(WARNING) << "Parameter `callback' is NLLL";
         return;
     }
-    
+
     ClosureGuard guard(callback);
     if (_oncancel_id != INVALID_BTHREAD_ID) {
         LOG(FATAL) << "NotifyCancel a single call more than once!";
@@ -624,8 +629,16 @@ void Controller::OnVersionedRPCReturned(const CompletionInfo& info,
         response_attachment().clear();
         return IssueRPC(butil::gettimeofday_us());
     }
-    
+
 END_OF_RPC:
+    if (!_error_code && is_response_read_progressively()) {
+        if (_current_call.sending_sock) {
+            // Set tcp keepalive for progressive read connection.
+            _current_call.sending_sock->SetTcpKeepAlive(_keepalive_parm);
+        } else {
+            LOG(FATAL) << "Failed to call SetTcpKeepAlive due to null socket";
+        }
+    }
     if (new_bthread) {
         // [ Essential for -usercode_in_pthread=true ]
         // When -usercode_in_pthread is on, the reserved threads (set by
@@ -707,7 +720,7 @@ void Controller::Call::OnComplete(
         }
 
         if (enable_circuit_breaker) {
-            sending_sock->FeedbackCircuitBreaker(error_code, 
+            sending_sock->FeedbackCircuitBreaker(error_code,
                 butil::gettimeofday_us() - begin_time_us);
         }
     }
@@ -874,7 +887,7 @@ void Controller::EndRPC(const CompletionInfo& info) {
     const CallId saved_cid = _correlation_id;
     if (_done) {
         if (!FLAGS_usercode_in_pthread || _done == DoNothing()/*Note*/) {
-            // Note: no need to run DoNothing in backup thread when pthread 
+            // Note: no need to run DoNothing in backup thread when pthread
             // mode is on. Otherwise there's a tricky deadlock:
             // void SomeService::CallMethod(...) { // -usercode_in_pthread=true
             //   ...
@@ -884,7 +897,7 @@ void Controller::EndRPC(const CompletionInfo& info) {
             // }
             // Join is not signalled when the done does not Run() and the done
             // can't Run() because all backup threads are blocked by Join().
-            
+
             OnRPCEnd(butil::gettimeofday_us());
             const bool destroy_cid_in_done = has_flag(FLAGS_DESTROY_CID_IN_DONE);
             _done->Run();
@@ -1289,7 +1302,7 @@ void Controller::HandleStreamConnection(Socket *host_socket) {
     if (_request_stream == INVALID_STREAM_ID) {
         CHECK(!has_remote_stream());
         return;
-    } 
+    }
     SocketUniquePtr ptr;
     if (!FailedInline()) {
         if (Socket::Address(_request_stream, &ptr) != 0) {
@@ -1306,7 +1319,7 @@ void Controller::HandleStreamConnection(Socket *host_socket) {
     if (FailedInline()) {
         Stream::SetFailed(_request_stream);
         if (_remote_stream_settings != NULL) {
-            policy::SendStreamRst(host_socket, 
+            policy::SendStreamRst(host_socket,
                                   _remote_stream_settings->stream_id());
         }
         return;
@@ -1331,7 +1344,7 @@ void WebEscape(const std::string& source, std::string* output) {
     }
 }
 
-void Controller::reset_rpc_dump_meta(RpcDumpMeta* meta) { 
+void Controller::reset_rpc_dump_meta(RpcDumpMeta* meta) {
     delete _rpc_dump_meta;
     _rpc_dump_meta = meta;
 }
@@ -1360,7 +1373,7 @@ Controller::CreateProgressiveAttachment(StopStyle stop_style) {
     }
     SocketUniquePtr httpsock;
     _current_call.sending_sock->ReAddress(&httpsock);
-    
+
     if (stop_style == FORCE_STOP) {
         httpsock->fail_me_at_server_stop();
     }

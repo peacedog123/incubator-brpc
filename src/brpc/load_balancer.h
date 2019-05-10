@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -69,7 +69,7 @@ public:
     //  Take a look at policy/round_robin_load_balancer.cpp to see how to
     //  make SelectServer() low contended by using DoublyBufferedData<>
     // =====================================================================
-    
+
     // Add `server' into this balancer.
     // Returns true on added.
     virtual bool AddServer(const ServerId& server) = 0;
@@ -85,7 +85,7 @@ public:
     // Remove a list of `servers' from this balancer.
     // Returns number of servers removed.
     virtual size_t RemoveServersInBatch(const std::vector<ServerId>& servers) = 0;
-    
+
     // Select a server and address it into `out->ptr'.
     // If Feedback() should be called when the RPC is done, set
     // out->need_feedback to true.
@@ -109,6 +109,7 @@ DECLARE_bool(show_lb_in_vars);
 
 // A intrusively shareable load balancer created from name.
 class SharedLoadBalancer : public SharedObject, public NonConstDescribable {
+friend class CouchbaseHelper;
 public:
     SharedLoadBalancer();
     ~SharedLoadBalancer();
@@ -124,7 +125,7 @@ public:
     }
 
     void Feedback(const LoadBalancer::CallInfo& info) { _lb->Feedback(info); }
-    
+
     bool AddServer(const ServerId& server) {
         if (_lb->AddServer(server)) {
             _weight_sum.fetch_add(1, butil::memory_order_relaxed);
@@ -139,7 +140,7 @@ public:
         }
         return false;
     }
-    
+
     size_t AddServersInBatch(const std::vector<ServerId>& servers) {
         size_t n = _lb->AddServersInBatch(servers);
         if (n) {
@@ -168,6 +169,9 @@ private:
                                 butil::StringPiece* lb_params);
     static void DescribeLB(std::ostream& os, void* arg);
     void ExposeLB();
+
+    // Only used by CouchbaseHelper now.
+    LoadBalancer* lb() const { return _lb; }
 
     LoadBalancer* _lb;
     butil::atomic<int> _weight_sum;

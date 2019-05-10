@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -60,13 +60,13 @@ public:
     // provided value.
     bool Set(const butil::StringPiece& key, const butil::StringPiece& value,
              uint32_t flags, uint32_t exptime, uint64_t cas_value);
-    
+
     bool Add(const butil::StringPiece& key, const butil::StringPiece& value,
              uint32_t flags, uint32_t exptime, uint64_t cas_value);
 
     bool Replace(const butil::StringPiece& key, const butil::StringPiece& value,
                  uint32_t flags, uint32_t exptime, uint64_t cas_value);
-    
+
     bool Append(const butil::StringPiece& key, const butil::StringPiece& value,
                 uint32_t flags, uint32_t exptime, uint64_t cas_value);
 
@@ -80,7 +80,7 @@ public:
                    uint64_t initial_value, uint32_t exptime);
     bool Decrement(const butil::StringPiece& key, uint64_t delta,
                    uint64_t initial_value, uint32_t exptime);
-    
+
     bool Touch(const butil::StringPiece& key, uint32_t exptime);
 
     bool Version();
@@ -95,7 +95,7 @@ public:
     void MergeFrom(const MemcacheRequest& from);
     void Clear();
     bool IsInitialized() const;
-  
+
     int ByteSize() const;
     bool MergePartialFromCodedStream(
         ::google::protobuf::io::CodedInputStream* input);
@@ -103,19 +103,19 @@ public:
         ::google::protobuf::io::CodedOutputStream* output) const;
     ::google::protobuf::uint8* SerializeWithCachedSizesToArray(::google::protobuf::uint8* output) const;
     int GetCachedSize() const { return _cached_size_; }
-    
+
     static const ::google::protobuf::Descriptor* descriptor();
     static const MemcacheRequest& default_instance();
     ::google::protobuf::Metadata GetMetadata() const;
 
     butil::IOBuf& raw_buffer() { return _buf; }
     const butil::IOBuf& raw_buffer() const { return _buf; }
-    
-private:
+
+protected:
     bool GetOrDelete(uint8_t command, const butil::StringPiece& key);
     bool Counter(uint8_t command, const butil::StringPiece& key, uint64_t delta,
                  uint64_t initial_value, uint32_t exptime);
-    
+
     bool Store(uint8_t command, const butil::StringPiece& key,
                const butil::StringPiece& value,
                uint32_t flags, uint32_t exptime, uint64_t cas_value);
@@ -132,7 +132,7 @@ friend void protobuf_AddDesc_baidu_2frpc_2fmemcache_5fbase_2eproto_impl();
 friend void protobuf_AddDesc_baidu_2frpc_2fmemcache_5fbase_2eproto();
 friend void protobuf_AssignDesc_baidu_2frpc_2fmemcache_5fbase_2eproto();
 friend void protobuf_ShutdownFile_baidu_2frpc_2fmemcache_5fbase_2eproto();
-  
+
     void InitAsDefaultInstance();
     static MemcacheRequest* default_instance_;
 };
@@ -172,6 +172,7 @@ public:
         STATUS_EINVAL = 0x04,
         STATUS_NOT_STORED = 0x05,
         STATUS_DELTA_BADVAL = 0x06,
+        STATUS_NOT_MY_VBUCKET = 0x07,
         STATUS_AUTH_ERROR = 0x20,
         STATUS_AUTH_CONTINUE = 0x21,
         STATUS_UNKNOWN_COMMAND = 0x81,
@@ -188,7 +189,7 @@ public:
     void Swap(MemcacheResponse* other);
 
     const std::string& LastError() const { return _err; }
-   
+
     bool PopGet(butil::IOBuf* value, uint32_t* flags, uint64_t* cas_value);
     bool PopGet(std::string* value, uint32_t* flags, uint64_t* cas_value);
     bool PopSet(uint64_t* cas_value);
@@ -202,9 +203,9 @@ public:
     bool PopDecrement(uint64_t* new_value, uint64_t* cas_value);
     bool PopTouch();
     bool PopVersion(std::string* version);
-      
+
     // implements Message ----------------------------------------------
-  
+
     MemcacheResponse* New() const;
     void CopyFrom(const ::google::protobuf::Message& from);
     void MergeFrom(const ::google::protobuf::Message& from);
@@ -212,7 +213,7 @@ public:
     void MergeFrom(const MemcacheResponse& from);
     void Clear();
     bool IsInitialized() const;
-  
+
     int ByteSize() const;
     bool MergePartialFromCodedStream(
         ::google::protobuf::io::CodedInputStream* input);
@@ -229,8 +230,10 @@ public:
     const butil::IOBuf& raw_buffer() const { return _buf; }
 
     static const char* status_str(Status);
+    // You should get the status after pop operation. Otherwise, it is a dummy value -1.
+    Status LastStatus() const { return (Status)_status; }
 
-private:
+protected:
     bool PopCounter(uint8_t command, uint64_t* new_value, uint64_t* cas_value);
     bool PopStore(uint8_t command, uint64_t* cas_value);
 
@@ -238,6 +241,7 @@ private:
     void SharedDtor();
     void SetCachedSize(int size) const;
 
+    int _status = -1;
     std::string _err;
     butil::IOBuf _buf;
     mutable int _cached_size_;
@@ -246,7 +250,7 @@ friend void protobuf_AddDesc_baidu_2frpc_2fmemcache_5fbase_2eproto_impl();
 friend void protobuf_AddDesc_baidu_2frpc_2fmemcache_5fbase_2eproto();
 friend void protobuf_AssignDesc_baidu_2frpc_2fmemcache_5fbase_2eproto();
 friend void protobuf_ShutdownFile_baidu_2frpc_2fmemcache_5fbase_2eproto();
-  
+
     void InitAsDefaultInstance();
     static MemcacheResponse* default_instance_;
 };

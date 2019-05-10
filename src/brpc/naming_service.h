@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,6 +29,10 @@
 
 namespace brpc {
 
+// If users init channel by passing NamingService object directly,
+// the service name will be set this default value.
+const std::string kCallerCreatedNamingService("CreatedByUsers");
+
 // Continuing actions to added/removed servers.
 // NOTE: You don't have to implement this class.
 class NamingServiceActions {
@@ -41,7 +45,7 @@ public:
 
 // Mapping a name to ServerNodes.
 class NamingService : public Describable, public Destroyable {
-public:    
+public:
     // Implement this method to get servers associated with `service_name'
     // in periodic or event-driven manner, call methods of `actions' to
     // tell RPC system about server changes. This method will be run in
@@ -62,7 +66,15 @@ public:
     // Caller is responsible for Destroy() the instance after usage.
     virtual NamingService* New() const = 0;
 
-protected:
+    // If return true, NamingServiceThread will print logs about added/removed
+    // server when servers changed. If a naming service change servers too frequently
+    // during a short time, make this method return false to avoid to print log too heavy.
+    virtual bool PrintServerChangeLogsEveryTime() { return true; }
+
+    static bool IsCreatedByUsers(const char* service_name) {
+        return kCallerCreatedNamingService.compare(service_name) == 0;
+    }
+
     virtual ~NamingService() {}
 };
 

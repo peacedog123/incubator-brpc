@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -75,7 +75,7 @@ enum MemcacheBinaryCommand {
     MC_BINARY_SASL_LIST_MECHS = 0x20,
     MC_BINARY_SASL_AUTH = 0x21,
     MC_BINARY_SASL_STEP = 0x22,
-    
+
     // These commands are used for range operations and exist within
     // this header for use in other projects.  Range operations are
     // not expected to be implemented in the memcached server itself.
@@ -91,7 +91,10 @@ enum MemcacheBinaryCommand {
     MC_BINARY_RINCR     = 0x39,
     MC_BINARY_RINCRQ    = 0x3a,
     MC_BINARY_RDECR     = 0x3b,
-    MC_BINARY_RDECRQ    = 0x3c
+    MC_BINARY_RDECRQ    = 0x3c,
+
+    // Replicas read for couchbase
+    MC_BINARY_REPLICAS_READ = 0x83
     // End Range operations
 };
 
@@ -116,7 +119,7 @@ struct MemcacheRequestHeader {
 
     // Length in bytes of extra + key + value
     uint32_t total_body_length;
-    
+
     // Will be copied back to you in the response
     uint32_t opaque;
 
@@ -145,7 +148,7 @@ struct MemcacheResponseHeader {
 
     // Length in bytes of extra + key + value
     uint32_t total_body_length;
-    
+
     // Will be copied back to you in the response
     uint32_t opaque;
 

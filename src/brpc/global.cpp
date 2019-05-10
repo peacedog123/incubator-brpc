@@ -45,6 +45,7 @@
 #include "brpc/policy/consistent_hashing_load_balancer.h"
 #include "brpc/policy/hasher.h"
 #include "brpc/policy/dynpart_load_balancer.h"
+#include "brpc/policy/couchbase_load_balancer.h"
 
 // Compress handlers
 #include "brpc/compress.h"
@@ -118,7 +119,7 @@ struct GlobalExtensions {
         , ch_ketama_lb(CONS_HASH_LB_KETAMA)
         , constant_cl(0) {
     }
-    
+
 #ifdef BAIDU_INTERNAL
     BaiduNamingService bns;
 #endif
@@ -137,6 +138,8 @@ struct GlobalExtensions {
     ConsistentHashingLoadBalancer ch_md5_lb;
     ConsistentHashingLoadBalancer ch_ketama_lb;
     DynPartLoadBalancer dynpart_lb;
+    // Only used by CouchbaseChannel. Users should not use this.
+    CouchbaseLoadBalancer cb_lb;
 
     AutoConcurrencyLimiter auto_cl;
     ConstantConcurrencyLimiter constant_cl;
@@ -359,6 +362,7 @@ static void GlobalInitializeOrDieImpl() {
     LoadBalancerExtension()->RegisterOrDie("c_md5", &g_ext->ch_md5_lb);
     LoadBalancerExtension()->RegisterOrDie("c_ketama", &g_ext->ch_ketama_lb);
     LoadBalancerExtension()->RegisterOrDie("_dynpart", &g_ext->dynpart_lb);
+    LoadBalancerExtension()->RegisterOrDie("cb_lb", &g_ext->cb_lb);
 
     // Compress Handlers
     const CompressHandler gzip_compress =
@@ -588,7 +592,7 @@ static void GlobalInitializeOrDieImpl() {
     // Concurrency Limiters
     ConcurrencyLimiterExtension()->RegisterOrDie("auto", &g_ext->auto_cl);
     ConcurrencyLimiterExtension()->RegisterOrDie("constant", &g_ext->constant_cl);
-    
+
     if (FLAGS_usercode_in_pthread) {
         // Optional. If channel/server are initialized before main(), this
         // flag may be false at here even if it will be set to true after

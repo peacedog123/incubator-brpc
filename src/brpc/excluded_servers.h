@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,6 +42,8 @@ public:
     static bool IsExcluded(const ExcludedServers* s, SocketId id) {
         return s != NULL && s->IsExcluded(id);
     }
+
+    SocketId GetLastId() const;
 
     // #servers inside.
     size_t size() const { return _l.size(); }
@@ -82,6 +84,11 @@ inline void ExcludedServers::Add(SocketId id) {
     if (last_id == NULL || *last_id != id) {
         _l.elim_push(id);
     }
+}
+
+inline SocketId ExcludedServers::GetLastId() const {
+    BAIDU_SCOPED_LOCK(_mutex);
+    return *(_l.bottom());
 }
 
 inline bool ExcludedServers::IsExcluded(SocketId id) const {

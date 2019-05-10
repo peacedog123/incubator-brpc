@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -178,7 +178,7 @@ void MemcacheRequest::Clear() {
 bool MemcacheRequest::MergePartialFromCodedStream(
     ::google::protobuf::io::CodedInputStream* input) {
     LOG(WARNING) << "You're not supposed to parse a MemcacheRequest";
-    
+
     // simple approach just making it work.
     butil::IOBuf tmp;
     const void* data = NULL;
@@ -360,7 +360,7 @@ bool MemcacheResponse::MergePartialFromCodedStream(
 void MemcacheResponse::SerializeWithCachedSizes(
     ::google::protobuf::io::CodedOutputStream* output) const {
     LOG(WARNING) << "You're not supposed to serialize a MemcacheResponse";
-    
+
     // simple approach just making it work.
     butil::IOBufAsZeroCopyInputStream wrapper(_buf);
     const void* data = NULL;
@@ -451,6 +451,8 @@ const char* MemcacheResponse::status_str(Status st) {
         return "Not stored";
     case STATUS_DELTA_BADVAL:
         return "Bad delta";
+    case STATUS_NOT_MY_VBUCKET:
+        return "Not my vbucket";
     case STATUS_AUTH_ERROR:
         return "authentication error";
     case STATUS_AUTH_CONTINUE:
@@ -560,7 +562,8 @@ bool MemcacheResponse::PopGet(
         return false;
     }
     _buf.copy_to(&header, sizeof(header));
-    if (header.command != (uint8_t)policy::MC_BINARY_GET) {
+    if (header.command != (uint8_t)policy::MC_BINARY_GET &&
+        header.command != (uint8_t)policy::MC_BINARY_REPLICAS_READ) {
         butil::string_printf(&_err, "not a GET response");
         return false;
     }
@@ -569,6 +572,7 @@ bool MemcacheResponse::PopGet(
                   (unsigned)n, (unsigned)sizeof(header), header.total_body_length);
         return false;
     }
+    _status = header.status;
     if (header.status != (uint16_t)STATUS_SUCCESS) {
         LOG_IF(ERROR, header.extras_length != 0) << "GET response must not have flags";
         LOG_IF(ERROR, header.key_length != 0) << "GET response must not have key";
@@ -589,7 +593,7 @@ bool MemcacheResponse::PopGet(
                   header.extras_length);
         return false;
     }
-    if (header.key_length != 0) {
+    if (header.key_length != 0 && header.command == (uint8_t)policy::MC_BINARY_GET) {
         butil::string_printf(&_err, "GET response must not have key");
         return false;
     }
@@ -708,6 +712,7 @@ bool MemcacheResponse::PopStore(uint8_t command, uint64_t* cas_value) {
     LOG_IF(ERROR, header.key_length != 0) << "STORE response must not have key";
     int value_size = (int)header.total_body_length - (int)header.extras_length
         - (int)header.key_length;
+    _status = header.status;
     if (header.status != (uint16_t)STATUS_SUCCESS) {
         _buf.pop_front(sizeof(header) + header.extras_length + header.key_length);
         _err.clear();
@@ -742,7 +747,7 @@ bool MemcacheRequest::Replace(
     uint32_t flags, uint32_t exptime, uint64_t cas_value) {
     return Store(policy::MC_BINARY_REPLACE, key, value, flags, exptime, cas_value);
 }
-    
+
 bool MemcacheRequest::Append(
     const butil::StringPiece& key, const butil::StringPiece& value,
     uint32_t flags, uint32_t exptime, uint64_t cas_value) {
@@ -874,7 +879,7 @@ bool MemcacheResponse::PopCounter(
     const int value_size = (int)header.total_body_length - (int)header.extras_length
         - (int)header.key_length;
     _buf.pop_front(sizeof(header) + header.extras_length + header.key_length);
-
+    _status = header.status;
     if (header.status != (uint16_t)STATUS_SUCCESS) {
         if (value_size < 0) {
             butil::string_printf(&_err, "value_size=%d is negative", value_size);
@@ -998,6 +1003,7 @@ bool MemcacheResponse::PopVersion(std::string* version) {
         butil::string_printf(&_err, "value_size=%d is negative", value_size);
         return false;
     }
+    _status = header.status;
     if (header.status != (uint16_t)STATUS_SUCCESS) {
         _err.clear();
         _buf.cutn(&_err, value_size);
@@ -1010,5 +1016,5 @@ bool MemcacheResponse::PopVersion(std::string* version) {
     _err.clear();
     return true;
 }
- 
+
 } // namespace brpc

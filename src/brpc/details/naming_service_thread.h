@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -43,7 +43,7 @@ struct GetNamingServiceThreadOptions {
     GetNamingServiceThreadOptions()
         : succeed_without_server(false)
         , log_succeed_without_server(true) {}
-    
+
     bool succeed_without_server;
     bool log_succeed_without_server;
     ChannelSignature channel_signature;
@@ -84,13 +84,15 @@ class NamingServiceThread : public SharedObject, public Describable {
         std::vector<ServerNodeWithId> _removed_sockets;
     };
 
-public:    
+public:
     NamingServiceThread();
     ~NamingServiceThread();
 
     int Start(NamingService* ns,
               const std::string& protocol,
               const std::string& service_name,
+              const GetNamingServiceThreadOptions* options);
+    int Start(NamingService* ns,
               const GetNamingServiceThreadOptions* options);
     int WaitForFirstBatchOfServers();
 
@@ -107,6 +109,10 @@ private:
     static void ServerNodeWithId2ServerId(
         const std::vector<ServerNodeWithId>& src,
         std::vector<ServerId>* dst, const NamingServiceFilter* filter);
+
+    // Avoid to print log too frequently.
+    std::string _log_buf;
+    uint64_t _count = 0;
 
     butil::Mutex _mutex;
     bthread_t _tid;
@@ -132,6 +138,9 @@ int GetNamingServiceThread(butil::intrusive_ptr<NamingServiceThread>* ns_thread,
                            const char* url,
                            const GetNamingServiceThreadOptions* options);
 
+int GetNamingServiceThread(butil::intrusive_ptr<NamingServiceThread>* nsthread_out,
+                           NamingService* ns,
+                           const GetNamingServiceThreadOptions* options);
 } // namespace brpc
 
 

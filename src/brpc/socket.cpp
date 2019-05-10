@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,6 +25,8 @@
 #include <mesalink/openssl/x509.h>
 #endif
 #include <netinet/tcp.h>                         // getsockopt
+#include <sys/types.h>
+#include <sys/socket.h>                          // setsockopt
 #include <gflags/gflags.h>
 #include "bthread/unstable.h"                    // bthread_timer_del
 #include "butil/fd_utility.h"                     // make_non_blocking
@@ -70,11 +72,11 @@ DEFINE_bool(log_idle_connection_close, false,
             "Print log when an idle connection is closed");
 BRPC_VALIDATE_GFLAG(log_idle_connection_close, PassValidate);
 
-DEFINE_int32(socket_recv_buffer_size, -1, 
+DEFINE_int32(socket_recv_buffer_size, -1,
             "Set the recv buffer size of socket if this value is positive");
 
 // Default value of SNDBUF is 2500000 on most machines.
-DEFINE_int32(socket_send_buffer_size, -1, 
+DEFINE_int32(socket_send_buffer_size, -1,
             "Set send buffer size of sockets if this value is positive");
 
 DEFINE_int32(ssl_bio_buffer_size, 16*1024, "Set buffer size for SSL read/write");
@@ -111,14 +113,14 @@ public:
     // Get an address-able socket. If the pool is empty, create one.
     // Returns 0 on success.
     int GetSocket(SocketUniquePtr* ptr);
-    
+
     // Return a socket (which was returned by GetSocket) back to the pool,
     // if the pool is full, setfail the socket directly.
     void ReturnSocket(Socket* sock);
-    
+
     // Get all pooled sockets inside.
     void ListSockets(std::vector<SocketId>* list, size_t max_count);
-    
+
 private:
     // options used to create this instance
     SocketOptions _options;
@@ -166,7 +168,7 @@ public:
     // which has the disadvantage that accesses to different pools contend
     // with each other.
     butil::atomic<SocketPool*> socket_pool;
-    
+
     // The socket newing this object.
     SocketId creator_socket_id;
 
@@ -237,7 +239,7 @@ void Socket::SharedPart::UpdateStatsEverySecond(int64_t now_ms) {
     stat->in_num_messages_s = in_nmsg - stat->last_in_num_messages;
     stat->out_size_s = out_sz - stat->last_out_size;
     stat->out_num_messages_s = out_nmsg - stat->last_out_num_messages;
-    
+
     stat->last_in_size = in_sz;
     stat->last_in_num_messages = in_nmsg;
     stat->last_out_size = out_sz;
@@ -299,12 +301,12 @@ const uint32_t MAX_PIPELINED_COUNT = 32768;
 
 struct BAIDU_CACHELINE_ALIGNMENT Socket::WriteRequest {
     static WriteRequest* const UNCONNECTED;
-    
+
     butil::IOBuf data;
     WriteRequest* next;
     bthread_id_t id_wait;
     Socket* socket;
-    
+
     uint32_t pipelined_count() const {
         return (_pc_and_udmsg >> 48) & 0x7FFF;
     }
@@ -345,7 +347,7 @@ struct BAIDU_CACHELINE_ALIGNMENT Socket::WriteRequest {
 
     // Register pipelined_count and user_message
     void Setup(Socket* s);
-    
+
 private:
     uint64_t _pc_and_udmsg;
 };
@@ -399,7 +401,7 @@ public:
             timer_id = 0;
         }
     }
-    
+
     void BeforeRecycle(Socket*) {
         // Recycle itself
         delete this;
@@ -554,7 +556,7 @@ int Socket::ResetFileDescriptor(int fd) {
         int buff_size = FLAGS_socket_send_buffer_size;
         socklen_t size = sizeof(buff_size);
         if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &buff_size, size) != 0) {
-            PLOG(FATAL) << "Fail to set sndbuf of fd=" << fd << " to " 
+            PLOG(FATAL) << "Fail to set sndbuf of fd=" << fd << " to "
                         << buff_size;
         }
     }
@@ -563,14 +565,14 @@ int Socket::ResetFileDescriptor(int fd) {
         int buff_size = FLAGS_socket_recv_buffer_size;
         socklen_t size = sizeof(buff_size);
         if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buff_size, size) != 0) {
-            PLOG(FATAL) << "Fail to set rcvbuf of fd=" << fd << " to " 
+            PLOG(FATAL) << "Fail to set rcvbuf of fd=" << fd << " to "
                         << buff_size;
         }
     }
 
     if (_on_edge_triggered_events) {
         if (GetGlobalEventDispatcher(fd).AddConsumer(id(), fd) != 0) {
-            PLOG(ERROR) << "Fail to add SocketId=" << id() 
+            PLOG(ERROR) << "Fail to add SocketId=" << id()
                         << " into EventDispatcher";
             _fd.store(-1, butil::memory_order_release);
             return -1;
@@ -652,7 +654,7 @@ int Socket::Create(const SocketOptions& options, SocketId* id) {
     if (m->ResetFileDescriptor(options.fd) != 0) {
         const int saved_errno = errno;
         PLOG(ERROR) << "Fail to ResetFileDescriptor";
-        m->SetFailed(saved_errno, "Fail to ResetFileDescriptor: %s", 
+        m->SetFailed(saved_errno, "Fail to ResetFileDescriptor: %s",
                      berror(saved_errno));
         return -1;
     }
@@ -678,7 +680,7 @@ int Socket::WaitAndReset(int32_t expected_nref) {
                 return -1;
             }
         } else if (NRefOfVRef(vref) < expected_nref) {
-            RPC_VLOG << "SocketId=" << _this_id 
+            RPC_VLOG << "SocketId=" << _this_id
                      << " was abandoned during health checking";
             return -1;
         } else {
@@ -701,7 +703,7 @@ int Socket::WaitAndReset(int32_t expected_nref) {
     if (_ssl_session) {
         SSL_free(_ssl_session);
         _ssl_session = NULL;
-    }        
+    }
     _ssl_state = SSL_UNKNOWN;
     _nevent.store(0, butil::memory_order_relaxed);
     // parsing_context is very likely to be associated with the fd,
@@ -737,7 +739,7 @@ void Socket::Revive() {
     uint64_t vref = _versioned_ref.load(butil::memory_order_relaxed);
     while (1) {
         CHECK_EQ(id_ver + 1, VersionOfVRef(vref));
-        
+
         int32_t nref = NRefOfVRef(vref);
         if (nref <= 1) {
             CHECK_EQ(1, nref);
@@ -831,7 +833,7 @@ int Socket::SetFailed(int error_code, const char* error_fmt, ...) {
             _error_code = error_code;
             _error_text = error_text;
             pthread_mutex_unlock(&_id_wait_list_mutex);
-            
+
             // Do health-checking even if we're not connected before, needed
             // by Channel to revive never-connected socket when server side
             // comes online.
@@ -980,7 +982,7 @@ void Socket::OnRecycle() {
 
     _auth_flag_error.store(0, butil::memory_order_relaxed);
     bthread_id_error(_auth_id, 0);
-    
+
     bthread_id_list_destroy(&_id_wait_list);
 
     if (_ssl_session) {
@@ -989,7 +991,7 @@ void Socket::OnRecycle() {
     }
 
     _ssl_ctx = NULL;
-    
+
     delete _pipeline_q;
     _pipeline_q = NULL;
 
@@ -1006,7 +1008,7 @@ void Socket::OnRecycle() {
             ptr->ReleaseAdditionalReference();
         }
     }
-    
+
     g_vars->nsocket << -1;
 }
 
@@ -1121,7 +1123,7 @@ int Socket::Connect(const timespec* abstime,
     CHECK_EQ(0, butil::make_close_on_exec(sockfd));
     // We need to do async connect (to manage the timeout by ourselves).
     CHECK_EQ(0, butil::make_non_blocking(sockfd));
-    
+
     struct sockaddr_in serv_addr;
     bzero((char*)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -1169,7 +1171,7 @@ int Socket::Connect(const timespec* abstime,
                          (int)sockfd, berror(saved_errno));
             return -1;
         }
-        
+
         // Register a timer for EpollOutRequest. Note that the timeout
         // callback has no race with the one above as both of them try
         // to `SetFailed' `connect_id' while only one of them can succeed
@@ -1186,7 +1188,7 @@ int Socket::Connect(const timespec* abstime,
                 return -1;
             }
         }
-        
+
     } else {
         if (WaitEpollOut(sockfd, false, abstime) != 0) {
             PLOG(WARNING) << "Fail to wait EPOLLOUT of fd=" << sockfd;
@@ -1199,14 +1201,14 @@ int Socket::Connect(const timespec* abstime,
     return sockfd.release();
 }
 
-int Socket::CheckConnected(int sockfd) {    
+int Socket::CheckConnected(int sockfd) {
     if (sockfd == STREAM_FAKE_FD) {
         return 0;
     }
     int err = 0;
     socklen_t errlen = sizeof(err);
     if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &err, &errlen) < 0) {
-        PLOG(ERROR) << "Fail to getsockopt of fd=" << sockfd; 
+        PLOG(ERROR) << "Fail to getsockopt of fd=" << sockfd;
         return -1;
     }
     if (err != 0) {
@@ -1248,7 +1250,7 @@ int Socket::ConnectIfNot(const timespec* abstime, WriteRequest* req) {
         }
     }
     s.release();
-    return 1;    
+    return 1;
 }
 
 int Socket::HandleEpollOut(SocketId id) {
@@ -1266,11 +1268,11 @@ int Socket::HandleEpollOut(SocketId id) {
     if (req != NULL) {
         return s->HandleEpollOutRequest(0, req);
     }
-    
+
     // Currently `WaitEpollOut' needs `_epollout_butex'
     // TODO(jiangrujie): Remove this in the future
     s->_epollout_butex->fetch_add(1, butil::memory_order_relaxed);
-    bthread::butex_wake_except(s->_epollout_butex, 0);  
+    bthread::butex_wake_except(s->_epollout_butex, 0);
     return 0;
 }
 
@@ -1387,7 +1389,7 @@ void Socket::CheckConnectedAndKeepWrite(int fd, int err, void* data) {
         AfterAppConnected(err, req);
     }
 }
-     
+
 inline int SetError(bthread_id_t id_wait, int ec) {
     if (id_wait != INVALID_BTHREAD_ID) {
         bthread_id_error(id_wait, ec);
@@ -1481,11 +1483,11 @@ int Socket::Write(SocketMessagePtr<>& msg, const WriteOptions* options_in) {
             return rc;
         }
     }
-    
+
     if (!opt.ignore_eovercrowded && _overcrowded) {
         return SetError(opt.id_wait, EOVERCROWDED);
     }
-    
+
     WriteRequest* req = butil::get_object<WriteRequest>();
     if (!req) {
         return SetError(opt.id_wait, ENOMEM);
@@ -1520,7 +1522,7 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
 
     // We've got the right to write.
     req->next = NULL;
-    
+
     // Connect to remote_side() if not.
     int ret = ConnectIfNot(opt.abstime, req);
     if (ret < 0) {
@@ -1537,13 +1539,13 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
     // which is assumed to run before any SocketMessage.AppendAndDestroySelf()
     // in some protocols(namely RTMP).
     req->Setup(this);
-    
+
     if (ssl_state() != SSL_OFF) {
         // Writing into SSL may block the current bthread, always write
         // in the background.
         goto KEEPWRITE_IN_BACKGROUND;
     }
-    
+
     // Write once in the calling thread. If the write is not complete,
     // continue it in KeepWrite thread.
     if (_conn) {
@@ -1558,7 +1560,7 @@ int Socket::StartWrite(WriteRequest* req, const WriteOptions& opt) {
             saved_errno = errno;
             // EPIPE is common in pooled connections + backup requests.
             PLOG_IF(WARNING, errno != EPIPE) << "Fail to write into " << *this;
-            SetFailed(saved_errno, "Fail to write into %s: %s", 
+            SetFailed(saved_errno, "Fail to write into %s: %s",
                       description().c_str(), berror(saved_errno));
             goto FAIL_TO_WRITE;
         }
@@ -1783,7 +1785,7 @@ int Socket::SSLHandshake(int fd, bool server_mode) {
                 return -1;
             }
             break;
- 
+
         default: {
             const unsigned long e = ERR_get_error();
             if (ssl_error == SSL_ERROR_ZERO_RETURN || e == 0) {
@@ -1824,7 +1826,7 @@ ssize_t Socket::DoRead(size_t size_hint) {
         case SSL_CONNECTED:
             CHECK(false) << "Impossible to reach here";
             break;
-            
+
         case SSL_OFF:
             break;
         }
@@ -1840,12 +1842,12 @@ ssize_t Socket::DoRead(size_t size_hint) {
     switch (ssl_error) {
     case SSL_ERROR_NONE:  // `nr' > 0
         break;
-            
+
     case SSL_ERROR_WANT_READ:
         // Regard this error as EAGAIN
         errno = EAGAIN;
         break;
-            
+
     case SSL_ERROR_WANT_WRITE:
         // Disable renegotiation
         errno = EPROTO;
@@ -1892,7 +1894,7 @@ int Socket::FightAuthentication(int* auth_error) {
 }
 
 void Socket::SetAuthentication(int error_code) {
-    uint64_t expected = 0;       
+    uint64_t expected = 0;
     // `bthread_id_destroy' has release fence to prevent this CAS being
     // reordered after it.
     if (_auth_flag_error.compare_exchange_strong(
@@ -2241,12 +2243,12 @@ void Socket::ResetAllStreams() {
     _stream_mutex.lock();
     if (_stream_set != NULL) {
         // Not delete _stream_set because there are likely more streams added
-        // after reviving if the Socket is still in use, or it is to be deleted in 
+        // after reviving if the Socket is still in use, or it is to be deleted in
         // OnRecycle()
         saved_stream_set.swap(*_stream_set);
     }
     _stream_mutex.unlock();
-    for (std::set<StreamId>::const_iterator 
+    for (std::set<StreamId>::const_iterator
             it = saved_stream_set.begin(); it != saved_stream_set.end(); ++it) {
         Stream::SetFailed(*it);
     }
@@ -2347,7 +2349,7 @@ inline void SocketPool::ReturnSocket(Socket* sock) {
 
 inline void SocketPool::ListSockets(std::vector<SocketId>* out, size_t max_count) {
     out->clear();
-    // NOTE: size() of vector is thread-unsafe and may return a very 
+    // NOTE: size() of vector is thread-unsafe and may return a very
     // large value during resizing.
     _mutex.lock();
     size_t expected_size = _pool.size();
@@ -2498,7 +2500,7 @@ bool Socket::GetPooledSocketStats(int* numfree, int* numinflight) {
     *numinflight = pool->_numinflight.load(butil::memory_order_relaxed);
     return true;
 }
-    
+
 int Socket::GetShortSocket(SocketUniquePtr* short_socket) {
     if (short_socket == NULL) {
         LOG(ERROR) << "short_socket is NULL";
@@ -2612,6 +2614,32 @@ void Socket::OnProgressiveReadCompleted() {
             ReturnToPool();
         } else if (_connection_type_for_progressive_read == CONNECTION_TYPE_SHORT) {
             SetFailed(EUNUSED, "[%s]Close short connection", __FUNCTION__);
+        }
+    }
+}
+
+void Socket::SetTcpKeepAlive(TcpKeepAliveParm* parm) {
+    int my_fd = fd();
+    int val = 1;
+    if (::setsockopt(my_fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&val, sizeof(val)) != 0) {
+        LOG(ERROR) << "Failed to open keepalive fd="<< my_fd << " SocketId=" << id()
+        << "@" << butil::endpoint2str(remote_side()) << " errno=" << ::strerror(errno);
+        return;
+    }
+    if (parm != nullptr) {
+        if ((parm->time > 0 && ::setsockopt(my_fd, SOL_TCP, TCP_KEEPIDLE,
+                                            (void *)&parm->time,
+                                            sizeof(parm->time)) != 0) ||
+            (parm->interval > 0 && ::setsockopt(my_fd, SOL_TCP, TCP_KEEPINTVL,
+                                                (void *)&parm->interval,
+                                                sizeof(parm->interval)) != 0) ||
+            (parm->probes > 0 && ::setsockopt(my_fd, SOL_TCP, TCP_KEEPCNT,
+                                              (void *)&parm->probes,
+                                              sizeof(parm->probes)) != 0)) {
+            LOG(ERROR) << "Failed to set keepalive parameter time=" << parm->time
+                << " interval=" << parm->interval << " probes=" << parm->probes
+                << " fd="<< my_fd << " SocketId=" << id() << "@"
+                << butil::endpoint2str(remote_side()) << " errno=" << ::strerror(errno);
         }
     }
 }

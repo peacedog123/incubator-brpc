@@ -1,11 +1,11 @@
 // Copyright (c) 2015 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -64,6 +64,7 @@ static void InitSupportedCommandMap() {
     butil::bit_array_set(supported_cmd_map, MC_BINARY_STAT);
     butil::bit_array_set(supported_cmd_map, MC_BINARY_TOUCH);
     butil::bit_array_set(supported_cmd_map, MC_BINARY_SASL_AUTH);
+    butil::bit_array_set(supported_cmd_map, MC_BINARY_REPLICAS_READ);
 }
 
 inline bool IsSupportedCommand(uint8_t command) {
@@ -77,7 +78,7 @@ ParseResult ParseMemcacheMessage(butil::IOBuf* source,
         const uint8_t* p_mcmagic = (const uint8_t*)source->fetch1();
         if (NULL == p_mcmagic) {
             return MakeParseError(PARSE_ERROR_NOT_ENOUGH_DATA);
-        }            
+        }
         if (*p_mcmagic != (uint8_t)MC_MAGIC_RESPONSE) {
             return MakeParseError(PARSE_ERROR_TRY_OTHERS);
         }
@@ -97,7 +98,7 @@ ParseResult ParseMemcacheMessage(butil::IOBuf* source,
             source->pop_front(sizeof(*header) + total_body_length);
             return MakeParseError(PARSE_ERROR_NOT_ENOUGH_DATA);
         }
-        
+
         PipelinedInfo pi;
         if (!socket->PopPipelinedInfo(&pi)) {
             LOG(WARNING) << "No corresponding PipelinedInfo in socket, drop";
@@ -129,7 +130,7 @@ ParseResult ParseMemcacheMessage(butil::IOBuf* source,
         if (header->command == MC_BINARY_SASL_AUTH) {
             if (header->status != 0) {
                 LOG(ERROR) << "Failed to authenticate the couchbase bucket.";
-                return MakeParseError(PARSE_ERROR_NO_RESOURCE, 
+                return MakeParseError(PARSE_ERROR_NO_RESOURCE,
                                       "Fail to authenticate with the couchbase bucket");
             }
             DestroyingPtr<MostCommonMessage> auth_msg(
@@ -144,7 +145,7 @@ ParseResult ParseMemcacheMessage(butil::IOBuf* source,
             } else {
                 socket->GivebackPipelinedInfo(pi);
             }
-        }    
+        }
     }
 }
 
@@ -160,7 +161,7 @@ void ProcessMemcacheResponse(InputMessageBase* msg_base) {
             << "Fail to lock correlation_id=" << cid << ": " << berror(rc);
         return;
     }
-    
+
     ControllerPrivateAccessor accessor(cntl);
     Span* span = accessor.span();
     if (span) {

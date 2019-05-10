@@ -47,6 +47,11 @@ BUTIL_SOURCES = \
     src/butil/third_party/snappy/snappy-stubs-internal.cc \
     src/butil/third_party/snappy/snappy.cc \
     src/butil/third_party/murmurhash3/murmurhash3.cpp \
+    src/butil/third_party/libvbucket/rfc1321/md5c.c \
+    src/butil/third_party/libvbucket/cJSON.c \
+    src/butil/third_party/libvbucket/crc32.c \
+    src/butil/third_party/libvbucket/ketama.c \
+    src/butil/third_party/libvbucket/vbucket.c \
     src/butil/arena.cpp \
     src/butil/at_exit.cc \
     src/butil/atomicops_internals_x86_gcc.cc \
@@ -167,15 +172,15 @@ BUTIL_OBJS = $(addsuffix .o, $(basename $(BUTIL_SOURCES)))
 
 BVAR_DIRS = src/bvar src/bvar/detail
 BVAR_SOURCES = $(foreach d,$(BVAR_DIRS),$(wildcard $(addprefix $(d)/*,$(SRCEXTS))))
-BVAR_OBJS = $(addsuffix .o, $(basename $(BVAR_SOURCES))) 
+BVAR_OBJS = $(addsuffix .o, $(basename $(BVAR_SOURCES)))
 
 BTHREAD_DIRS = src/bthread
 BTHREAD_SOURCES = $(foreach d,$(BTHREAD_DIRS),$(wildcard $(addprefix $(d)/*,$(SRCEXTS))))
-BTHREAD_OBJS = $(addsuffix .o, $(basename $(BTHREAD_SOURCES))) 
+BTHREAD_OBJS = $(addsuffix .o, $(basename $(BTHREAD_SOURCES)))
 
 JSON2PB_DIRS = src/json2pb
 JSON2PB_SOURCES = $(foreach d,$(JSON2PB_DIRS),$(wildcard $(addprefix $(d)/*,$(SRCEXTS))))
-JSON2PB_OBJS = $(addsuffix .o, $(basename $(JSON2PB_SOURCES))) 
+JSON2PB_OBJS = $(addsuffix .o, $(basename $(JSON2PB_SOURCES)))
 
 BRPC_DIRS = src/brpc src/brpc/details src/brpc/builtin src/brpc/policy
 THRIFT_SOURCES = $(foreach d,$(BRPC_DIRS),$(wildcard $(addprefix $(d)/thrift*,$(SRCEXTS))))

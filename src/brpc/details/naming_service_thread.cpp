@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Baidu, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,6 +23,7 @@
 #include "brpc/log.h"
 #include "brpc/socket_map.h"
 #include "brpc/details/naming_service_thread.h"
+#include "butil/time/time.h"
 
 
 namespace brpc {
@@ -90,7 +91,7 @@ void NamingServiceThread::Actions::RemoveServers(
 void NamingServiceThread::Actions::ResetServers(
         const std::vector<ServerNode>& servers) {
     _servers.assign(servers.begin(), servers.end());
-    
+
     // Diff servers with _last_servers by comparing sorted vectors.
     // Notice that _last_servers is always sorted.
     std::sort(_servers.begin(), _servers.end());
@@ -102,14 +103,14 @@ void NamingServiceThread::Actions::ResetServers(
         _servers.resize(dedup_size);
     }
     _added.resize(_servers.size());
-    std::vector<ServerNode>::iterator _added_end = 
+    std::vector<ServerNode>::iterator _added_end =
         std::set_difference(_servers.begin(), _servers.end(),
                             _last_servers.begin(), _last_servers.end(),
                             _added.begin());
     _added.resize(_added_end - _added.begin());
 
     _removed.resize(_last_servers.size());
-    std::vector<ServerNode>::iterator _removed_end = 
+    std::vector<ServerNode>::iterator _removed_end =
         std::set_difference(_last_servers.begin(), _last_servers.end(),
                             _servers.begin(), _servers.end(),
                             _removed.begin());
@@ -189,15 +190,33 @@ void NamingServiceThread::Actions::ResetServers(
 
     if (!_removed.empty() || !_added.empty()) {
         std::ostringstream info;
-        info << butil::class_name_str(*_owner->_ns) << "(\"" 
-             << _owner->_service_name << "\"):";
+        info << butil::class_name_str(*_owner->_ns) << "(\"" << _owner->_service_name << "\"):";
         if (!_added.empty()) {
             info << " added "<< _added.size();
         }
         if (!_removed.empty()) {
             info << " removed " << _removed.size();
         }
-        LOG(INFO) << info.str();
+        if (_owner->_ns->PrintServerChangeLogsEveryTime()) {
+            LOG(INFO) << info.str();
+        } else { // print log every 100 times.
+            if (_owner->_log_buf.empty()) {
+                _owner->_log_buf.append(":\'");
+            }
+            butil::Time::Exploded exploded_time;
+            butil::Time::Now().LocalExplode(&exploded_time);
+            butil::string_appendf(&_owner->_log_buf, "\nI%02d%02d %02d:%02d:%02d.%03d %s",
+                                  exploded_time.month, exploded_time.day_of_month,
+                                  exploded_time.hour, exploded_time.minute,
+                                  exploded_time.second, exploded_time.millisecond,
+                                  info.str().c_str());
+            if (_owner->_count % 100 == 0) {
+                _owner->_log_buf.append("\n\'");
+                LOG(INFO) << _owner->_log_buf;
+                _owner->_log_buf.clear();
+            }
+            ++_owner->_count;
+        }
     }
 
     EndWait(servers.empty() ? ENODATA : 0);
@@ -296,6 +315,30 @@ int NamingServiceThread::Start(NamingService* naming_service,
     return WaitForFirstBatchOfServers();
 }
 
+int NamingServiceThread::Start(NamingService* naming_service,
+                               const GetNamingServiceThreadOptions* opt_in) {
+    if (naming_service == NULL) {
+        LOG(ERROR) << "Param[naming_service] is NULL";
+        return -1;
+    }
+    _service_name = kCallerCreatedNamingService;
+    _ns = naming_service;
+    if (opt_in) {
+        _options = *opt_in;
+    }
+    _last_sockets.clear();
+    if (_ns->RunNamingServiceReturnsQuickly()) {
+        RunThis(this);
+    } else {
+        int rc = bthread_start_urgent(&_tid, NULL, RunThis, this);
+        if (rc) {
+            LOG(ERROR) << "Fail to create bthread: " << berror(rc);
+            return -1;
+        }
+    }
+    return WaitForFirstBatchOfServers();
+}
+
 int NamingServiceThread::WaitForFirstBatchOfServers() {
     int rc = _actions.WaitForFirstBatchOfServers();
     if (rc == ENODATA && _options.succeed_without_server) {
@@ -345,7 +388,7 @@ int NamingServiceThread::AddWatcher(NamingServiceWatcher* watcher,
     }
     return -1;
 }
-    
+
 int NamingServiceThread::RemoveWatcher(NamingServiceWatcher* watcher) {
     if (watcher == NULL) {
         LOG(ERROR) << "Param[watcher] is NULL";
@@ -476,6 +519,29 @@ int GetNamingServiceThread(
         if (nsthread->WaitForFirstBatchOfServers() != 0) {
             return -1;
         }
+    }
+    nsthread_out->swap(nsthread);
+    return 0;
+}
+
+int GetNamingServiceThread(
+    butil::intrusive_ptr<NamingServiceThread>* nsthread_out,
+    NamingService* ns,
+    const GetNamingServiceThreadOptions* options) {
+    if (ns == nullptr) {
+        LOG(ERROR) << "Null naming service.";
+        return -1;
+    }
+    butil::intrusive_ptr<NamingServiceThread> nsthread;
+    NamingServiceThread* ns_thread = new (std::nothrow) NamingServiceThread;
+    if (ns_thread == NULL) {
+        LOG(ERROR) << "Fail to new NamingServiceThread";
+        return -1;
+    }
+    nsthread.reset(ns_thread);
+    if (nsthread->Start(ns, options) != 0) {
+        LOG(ERROR) << "Fail to start NamingServiceThread";
+        return -1;
     }
     nsthread_out->swap(nsthread);
     return 0;
